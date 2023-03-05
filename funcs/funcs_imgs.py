@@ -1,27 +1,37 @@
 ## Main functions
 
-from lavis.models import load_model_and_preprocess
 import torch
+from PIL import Image
+from lavis.models import load_model_and_preprocess
 
-def match_text_text(text1, text2):
+def caption_image(path_image):
     """
-    Function to give matching score between two phrases (text1, text2)
+    Function to return caption for a given image
     """
 
     # setup device to use
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # load sample image
+    raw_image = Image.open(path_image).convert("RGB")
 
-    model, vis_processors, txt_processors = load_model_and_preprocess(name="blip_feature_extractor", model_type="base", is_eval=True, device=device)
+    # loads BLIP caption base model, with finetuned checkpoints on MSCOCO captioning dataset.
+    # this also loads the associated image processors
+    model, vis_processors, _ = load_model_and_preprocess(name="blip_caption", model_type="base_coco", is_eval=True, device=device)
+    # preprocess the image
+    # vis_processors stores image transforms for "train" and "eval" (validation / testing / inference)
+    image = vis_processors["eval"](raw_image).unsqueeze(0).to(device)
+    # generate caption
+    caption = model.generate({"image": image})
+    return caption
 
-    text_input = txt_processors["eval"](text1)
-    sample1 = {"image": None, "text_input": [text_input]}
+    #########################
 
-    text_input = txt_processors["eval"](text2)
-    sample2 = {"image": None, "text_input": [text_input]}
+    #model, vis_processors, txt_processors = load_model_and_preprocess(name="blip_vqa", model_type="vqav2", is_eval=True, device=device)
+    # ask a random question.
+    #question = "Which city is this photo taken?"
+    #image = vis_processors["eval"](raw_image).unsqueeze(0).to(device)
+    #question = txt_processors["eval"](question)
+    #caption = model.predict_answers(samples={"image": image, "text_input": question}, inference_method="generate")
+    #print(caption)
 
-    features_text1 = model.extract_features(sample1, mode="text")
-    features_text2 = model.extract_features(sample2, mode="text")
-
-    similarity = features_text1.text_embeds_proj[:,0,:] @ features_text2.text_embeds_proj[:,0,:].t()
-
-    return similarity.item()
+    ########################
